@@ -14,11 +14,12 @@ import {
   withCommandType,
   withValidatedActorLocation,
   type TransformerContext,
+  ErrorCode,
   NO_EFFECT_TYPE,
 } from '../scaffold';
 
-// TODO: import your effects functions from '../effects/effects'
-// TODO: import your event classes from '../effects/events'
+import { clearEffect, isEffectActive } from '../effects/effects';
+import { EffectDidEnd } from '../effects/events';
 
 // ---------------------------------------------------------------------------
 // Command
@@ -39,22 +40,30 @@ export class CleanseCommand extends AbstractCommand<CommandType.CLEANSE> {
 // ---------------------------------------------------------------------------
 
 /**
- * The reducer core receives pre-validated (context, command, actor, place).
- * It contains only business logic:
- *
- *   1. Check that the target effect is active. If not, declare EFFECT_NOT_ACTIVE.
- *   2. Clear the effect and declare an EffectDidEnd event.
- *   3. Return context.
+ * Core bit: wrappers already checked actor + place.
+ * Wrong / inactive effect → error. Otherwise strip it and emit EffectDidEnd.
  */
 const reducerCore: NeedsValidatedActorAndPlace<Transformer<CleanseCommand>> = (
-  context, command, actor, place,
+  context,
+  command,
+  actor,
+  _place,
 ): TransformerContext => {
-  // TODO: implement
-  return context;
+  if (!isEffectActive(actor.effects, command.effectType)) {
+    return context.declareError(command.id, ErrorCode.EFFECT_NOT_ACTIVE);
+  }
+  clearEffect(actor.effects, command.effectType);
+  return context.declareEvent(
+    EffectDidEnd,
+    command.id,
+    command.effectType,
+    actor.id,
+  );
 };
 
 export const reducer: Transformer<CleanseCommand> =
-  withCommandType(CommandType.CLEANSE,
+  withCommandType(
+    CommandType.CLEANSE,
     withValidatedActorLocation(
       reducerCore,
     ),
